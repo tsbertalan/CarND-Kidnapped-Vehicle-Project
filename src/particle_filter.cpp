@@ -70,12 +70,43 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
 
 }
 
-void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::vector<LandmarkObs>& observations) {
-	// TODO: Find the predicted measurement that is closest to each observed measurement and assign the 
+vector<double> ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::vector<LandmarkObs>& observations) {
+	// Find the predicted measurement that is closest to each observed measurement and assign the
 	//   observed measurement to this particular landmark.
 	// NOTE: this method will NOT be called by the grading code. But you will probably find it useful to 
 	//   implement this method and use it as a helper during the updateWeights phase.
 
+    // Brute force method.
+    LandmarkObs obsv, pred;
+    vector<double> distances;
+
+    // Loop over all the landmark observations.
+    for(int iobsv=0; iobsv<observations.size(); iobsv++) {
+        obsv = observations[iobsv];
+
+        // Find the nearest map landmark.
+        double bestdist = INFINITY;
+        int ibest;
+
+        // Loop over all the map landmarks, transformed into car coordinates.
+        for(int ipred=0; ipred<predicted.size(); ipred++) {
+            pred = predicted[ipred];
+
+            // Find the distance to this map landmark.
+            double d = sqrt(pow(pred.x - obsv.x, 2) + pow(pred.y - obsv.y, 2));
+
+            // Record the closest map landmark for this observed landmark.
+            if( d < bestdist ) {
+                obsv.id = pred.id;
+                bestdist = d;
+            }
+        }
+
+        // Record the best distance found for this observation.
+        distances.push_back(bestdist);
+    }
+    return distances;
+}
 }
 
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[], 
