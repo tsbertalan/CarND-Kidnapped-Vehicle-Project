@@ -114,12 +114,12 @@ vector<Deviation> ParticleFilter::dataAssociation(std::vector<LandmarkObs> predi
     return deviations;
 }
 
-//Map::single_landmark_s car2map(Particle car, LandmarkObs obs) {
-//    Map::single_landmark_s map_obs;
-//    map_obs.x = obs.x + cos(car.theta) * obs.x - sin(car.theta) * obs.y;
-//    map_obs.y = obs.y + sin(car.theta) * obs.x + cos(car.theta) * obs.y;
-//    return map_obs;
-//}
+Map::single_landmark_s car2map(Particle car, LandmarkObs obs) {
+    Map::single_landmark_s map_obs;
+    map_obs.x_f = obs.x + cos(car.theta) * obs.x - sin(car.theta) * obs.y;
+    map_obs.y_f = obs.y + sin(car.theta) * obs.x + cos(car.theta) * obs.y;
+    return map_obs;
+}
 
 LandmarkObs map2car(Particle car, Map::single_landmark_s map_obs) {
     LandmarkObs car_obs;
@@ -145,18 +145,32 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 
     // For each particle ...
     for(int iparticle=0; iparticle<num_particles; iparticle++) {
+        Particle particle = particles[iparticle];
 
         // Predict where the landmarks would be for this particle:
         // transform landmarks to car coordinates.
         vector<LandmarkObs> car_landmarks;
         for(int imap=0; imap<map_landmarks.landmark_list.size(); imap++) {
-            car_landmarks.push_back(map2car(particles[iparticle], map_landmarks.landmark_list[imap]));
+            car_landmarks.push_back(map2car(particle, map_landmarks.landmark_list[imap]));
         }
 
         // Associate each observation with one landmark.
         // Since observations is const, copy it here ... ?
         vector<LandmarkObs> assigned_observations = observations;
         vector<Deviation> deviations = dataAssociation(car_landmarks, assigned_observations);
+
+        // Since we did the association now, I guess we should set it in the particle.
+        vector<int> associations;
+        vector<double> sense_x;
+        vector<double> sense_y;
+        for(int iobs=0; iobs<assigned_observations.size(); iobs++) {
+            LandmarkObs obs = assigned_observations[iobs];
+            associations.push_back(obs.id);
+            Map::single_landmark_s sense = car2map(particle, obs);
+            sense_x.push_back(sense.x_f);
+            sense_y.push_back(sense.y_f);
+        }
+        SetAssociations(particle, associations, sense_x, sense_y);
 
         // With the distances between observations and predicted landmark locations; calculate a likelihood for each.
         // Compute the product likelihood for the particle.
@@ -171,7 +185,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
         }
 
         // Let the weight for the particle be just the product likelihood.
-        particles[iparticle].weight = likelihood;
+        particle.weight = likelihood;
 
     }
 }
