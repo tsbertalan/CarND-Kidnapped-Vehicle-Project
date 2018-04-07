@@ -23,7 +23,11 @@ struct Particle {
 	std::vector<double> sense_y;
 };
 
-
+class Deviation {
+public:
+    double dx, dy;
+    double r();
+};
 
 class ParticleFilter {
 	
@@ -77,8 +81,10 @@ public:
 	 *   a nearest-neighbors data association).
 	 * @param predicted Vector of predicted landmark observations
 	 * @param observations Vector of landmark observations
+	 *
+	 * @return deviations Deviation vectors (pairs) to closest landmark for each observation.
 	 */
-	void dataAssociation(std::vector<LandmarkObs> predicted, std::vector<LandmarkObs>& observations);
+	std::vector<Deviation> dataAssociation(std::vector<LandmarkObs> predicted, std::vector<LandmarkObs>& observations);
 	
 	/**
 	 * updateWeights Updates the weights for each particle based on the likelihood of the 
