@@ -70,7 +70,9 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
 
 }
 
-vector<double> ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::vector<LandmarkObs>& observations) {
+
+
+vector<Deviation> ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::vector<LandmarkObs>& observations) {
 	// Find the predicted measurement that is closest to each observed measurement and assign the
 	//   observed measurement to this particular landmark.
 	// NOTE: this method will NOT be called by the grading code. But you will probably find it useful to 
@@ -78,7 +80,8 @@ vector<double> ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicte
 
     // Brute force method.
     LandmarkObs obsv, pred;
-    vector<double> distances;
+    vector<Deviation> deviations;
+    Deviation d;
 
     // Loop over all the landmark observations.
     for(int iobsv=0; iobsv<observations.size(); iobsv++) {
@@ -93,29 +96,32 @@ vector<double> ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicte
             pred = predicted[ipred];
 
             // Find the distance to this map landmark.
-            double d = sqrt(pow(pred.x - obsv.x, 2) + pow(pred.y - obsv.y, 2));
+            d.dx = pred.x - obsv.x;
+            d.dy = pred.y - obsv.y;
 
             // Record the closest map landmark for this observed landmark.
-            if( d < bestdist ) {
+            double r = d.r();
+            if( r < bestdist ) {
                 obsv.id = pred.id;
-                bestdist = d;
+                bestdist = r;
             }
         }
 
-        // Record the best distance found for this observation.
-        distances.push_back(bestdist);
+        // Save the deviation vector for computing likelihood later.
+        deviations.push_back(d);
     }
-    return distances;
+
+    return deviations;
 }
 
-//single_landmark_s car2map(Particle car, LandmarkObs obs) {
-//    single_landmark_s map_obs;
+//Map::single_landmark_s car2map(Particle car, LandmarkObs obs) {
+//    Map::single_landmark_s map_obs;
 //    map_obs.x = obs.x + cos(car.theta) * obs.x - sin(car.theta) * obs.y;
 //    map_obs.y = obs.y + sin(car.theta) * obs.x + cos(car.theta) * obs.y;
 //    return map_obs;
 //}
 
-LandmarkObs map2car(Particle car, single_landmark_s map_obs) {
+LandmarkObs map2car(Particle car, Map::single_landmark_s map_obs) {
     LandmarkObs car_obs;
     car_obs.x = (map_obs.x_f - car.x) * cos(car.theta) + (map_obs.x_f - car.y) * sin(car.theta);
     car_obs.y = (map_obs.x_f - car.y) * cos(car.theta) - (map_obs.x_f - car.x) * sin(car.theta);
@@ -126,7 +132,7 @@ LandmarkObs map2car(Particle car, single_landmark_s map_obs) {
 
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[], 
 		const std::vector<LandmarkObs> &observations, const Map &map_landmarks) {
-	// TODO: Update the weights of each particle using a mult-variate Gaussian distribution. You can read
+	// Update the weights of each particle using a mult-variate Gaussian distribution. You can read
 	//   more about this distribution here: https://en.wikipedia.org/wiki/Multivariate_normal_distribution
 	// NOTE: The observations are given in the VEHICLE'S coordinate system. Your particles are located
 	//   according to the MAP'S coordinate system. You will need to transform between the two systems.
@@ -136,6 +142,38 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 	//   and the following is a good resource for the actual equation to implement (look at equation 
 	//   3.33
 	//   http://planning.cs.uiuc.edu/node99.html
+
+    // For each particle ...
+    for(int iparticle=0; iparticle<num_particles; iparticle++) {
+
+        // Predict where the landmarks would be for this particle:
+        // transform landmarks to car coordinates.
+        vector<LandmarkObs> car_landmarks;
+        for(int imap=0; imap<map_landmarks.landmark_list.size(); imap++) {
+            car_landmarks.push_back(map2car(particles[iparticle], map_landmarks.landmark_list[imap]));
+        }
+
+        // Associate each observation with one landmark.
+        // Since observations is const, copy it here ... ?
+        vector<LandmarkObs> assigned_observations = observations;
+        vector<Deviation> deviations = dataAssociation(car_landmarks, assigned_observations);
+
+        // With the distances between observations and predicted landmark locations; calculate a likelihood for each.
+        // Compute the product likelihood for the particle.
+        double likelihood = 1.0;
+        double exponent;
+        for(int iobs=0; iobs<deviations.size(); iobs++) {
+            Deviation d = deviations[iobs];
+            exponent = pow(d.dx, 2) / 2 / std_landmark[0] + pow(d.dy, 2) / 2 / std_landmark[1];
+            exponent *= -1;
+            // Don't bother normalizing the likelihoods.
+            likelihood *= exp(exponent);// / 2 / M_PI / std_landmark[0] / std_landmark[1];
+        }
+
+        // Let the weight for the particle be just the product likelihood.
+        particles[iparticle].weight = likelihood;
+
+    }
 }
 
 void ParticleFilter::resample() {
@@ -184,4 +222,8 @@ string ParticleFilter::getSenseY(Particle best)
     string s = ss.str();
     s = s.substr(0, s.length()-1);  // get rid of the trailing space
     return s;
+}
+
+double Deviation::r() {
+    return sqrt(pow(dx, 2) + pow(dy, 2));
 }
