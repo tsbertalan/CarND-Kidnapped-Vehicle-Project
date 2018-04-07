@@ -9,6 +9,8 @@
 #ifndef PARTICLE_FILTER_H_
 #define PARTICLE_FILTER_H_
 
+//#define DEBUG_PREDICTION
+
 #include "helper_functions.h"
 
 void msg(std::string m);
@@ -115,10 +117,10 @@ public:
 	 * This can be a very useful debugging tool to make sure transformations are correct and assocations correctly connected
 	 */
 	void SetAssociations(
-	        Particle& particle,
-            const std::vector<int>& associations,
-            const std::vector<double>& sense_x,
-            const std::vector<double>& sense_y);
+            Particle &particle,
+            const std::vector<int> associations,
+            const std::vector<double> sense_x,
+            const std::vector<double> sense_y);
 
 	
 	std::string getAssociations(Particle &best);

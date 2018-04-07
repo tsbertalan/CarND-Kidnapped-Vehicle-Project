@@ -20,7 +20,7 @@
 
 using namespace std;
 
-#define VERBOSE false
+//#define VERBOSE
 
 void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	// Set the number of particles. Initialize all particles to first position (based on estimates of
@@ -33,9 +33,15 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 
     unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
     default_random_engine gen(seed);
-    normal_distribution<double> dist_x(x, std[0]);
-    normal_distribution<double> dist_y(y, std[1]);
-    normal_distribution<double> dist_t(theta, std[2]);
+    #ifdef DEBUG_PREDICTION
+        normal_distribution<double> dist_x(x, 0);
+        normal_distribution<double> dist_y(y, 0);
+        normal_distribution<double> dist_t(theta, 0);
+    #else
+        normal_distribution<double> dist_x(x, std[0]);
+        normal_distribution<double> dist_y(y, std[1]);
+        normal_distribution<double> dist_t(theta, std[2]);
+    #endif
 
     for(int i=0; i<num_particles; i++) {
         Particle p;
@@ -44,6 +50,9 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
         p.y = dist_y(gen);
         p.theta = dist_t(gen);
         p.weight = 1;
+        #ifdef DEBUG_PREDICTION
+            if(i > 0) p.weight = 0;
+        #endif
         particles.push_back(p);
     }
 
@@ -78,14 +87,16 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
         p.theta = tf;
 
         // Add noise.
-        double nx, ny, nt;
-        nx = dist_x(gen);
-        ny = dist_y(gen);
-        nt = dist_t(gen);
+        #ifndef DEBUG_PREDICTION
+            double nx, ny, nt;
+            nx = dist_x(gen);
+            ny = dist_y(gen);
+            nt = dist_t(gen);
 
-        p.x += nx;
-        p.y += ny;
-        p.theta += nt;
+            p.x += nx;
+            p.y += ny;
+            p.theta += nt;
+        #endif
 
         // Record particle locations.
         f << p.describe();
@@ -144,18 +155,60 @@ vector<Deviation> ParticleFilter::dataAssociation(std::vector<LandmarkObs> predi
     return deviations;
 }
 
+void homogeneousTransform(double *pair, double x, double y, double xp, double yp, double tp) {
+    pair[0] = xp + x * cos(tp) - y * sin(tp);
+    pair[1] = yp + x * sin(tp) + y * cos(tp);
+}
+
 Map::single_landmark_s car2map(Particle &car, LandmarkObs &obs) {
     Map::single_landmark_s map_obs;
-    map_obs.x_f = car.x + cos(car.theta) * obs.x - sin(car.theta) * obs.y;
-    map_obs.y_f = car.y + sin(car.theta) * obs.x + cos(car.theta) * obs.y;
+
+    double pair[2];
+    homogeneousTransform(pair, obs.x, obs.y, car.x, car.y, car.theta);
+    map_obs.x_f = pair[0];
+    map_obs.y_f = pair[1];
+
+//    map_obs.x_f = car.x + cos(car.theta) * obs.x - sin(car.theta) * obs.y;
+//    map_obs.y_f = car.y + sin(car.theta) * obs.x + cos(car.theta) * obs.y;
+
+    map_obs.id_i = obs.id;
+
     return map_obs;
 }
 
 LandmarkObs map2car(Particle& car, Map::single_landmark_s map_obs) {
+
+    #ifdef VERBOSE
+        cout.precision(17);
+        msg("dict(");
+        cout << "car_particle = dict(x=" << car.x <<", y=" << car.y << ", t=" <<car.theta <<")," << endl;
+        cout << "map_landmark = dict(" << "id=" << map_obs.id_i << ", x=" << map_obs.x_f << ", y=" << map_obs.y_f << ")," << endl;
+    #endif
+
     LandmarkObs car_obs;
-    car_obs.x = (map_obs.x_f - car.x) * cos(car.theta) + (map_obs.x_f - car.y) * sin(car.theta);
-    car_obs.y = (map_obs.y_f - car.y) * cos(car.theta) - (map_obs.x_f - car.x) * sin(car.theta);
+
+    double pair[2];
+    homogeneousTransform(pair, map_obs.x_f, map_obs.y_f, -car.x, -car.y, -car.theta);
+    car_obs.x = pair[0];
+    car_obs.y = pair[1];
+
+    // From asking Mathematica to invert the given transformation:
+//    car_obs.x = (map_obs.x_f - car.x) * cos(car.theta) + (map_obs.x_f - car.y) * sin(car.theta);
+//    car_obs.y = (map_obs.y_f - car.y) * cos(car.theta) - (map_obs.x_f - car.x) * sin(car.theta);
+
+    // From plugging in -car.x, -car.y, -car.theta into the transformation manually.
+//    car_obs.x =  map_obs.x_f * cos(car.theta) + map_obs.y_f * sin(car.theta) - car.x;
+//    car_obs.y = -map_obs.x_f * sin(car.theta) + map_obs.y_f * cos(car.theta) - car.y;
+
     car_obs.id = map_obs.id_i;
+
+    #ifdef VERBOSE
+        cout << "car_obs = dict(" << "id=" << car_obs.id << ", x=" << car_obs.x << ", y=" << car_obs.y << ")," << endl;
+        Map::single_landmark_s reconstruction = car2map(car, car_obs);
+        cout << "reconstruction = dict(" << "id=" << reconstruction.id_i << ", x=" << reconstruction.x_f << ", y=" << reconstruction.y_f << ")," << endl;
+        msg("),");
+    #endif
+
     return car_obs;
 }
 
@@ -171,6 +224,10 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 	//   and the following is a good resource for the actual equation to implement (look at equation
 	//   3.33
 	//   http://planning.cs.uiuc.edu/node99.html
+
+    #ifdef DEBUG_PREDICTION
+    return;
+    #endif
 
     // For each particle ...
     for(Particle &particle : particles) {
@@ -209,7 +266,9 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
         // Compute the product likelihood for the particle.
         double likelihood = 1.0;
         double exponent;
-        if(VERBOSE) cout << "Weight for particle " << &particle << " is... " << endl;
+        #ifdef VERBOSE
+            cout << "Weight for particle " << &particle << " is... " << endl;
+        #endif
         for(auto& d : deviations) {
             double dx, dy;
             // What am I supposed to be doing with sensor_range?
@@ -220,15 +279,21 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 //                dx = sqrt(pow(sensor_range, 2)/2.0);
 //                dy = dx;
 //            }
-            if(VERBOSE) cout << "    (" << dx << "," << dy << ")->";
+            #ifdef VERBOSE
+                cout << "    (" << dx << "," << dy << ")->";
+            #endif
             exponent =
                       pow(dx, 2) / 2 / std_landmark[0] / std_landmark[0]
                     + pow(dy, 2) / 2 / std_landmark[1] / std_landmark[1];
             exponent *= -1;
             likelihood *= exp(exponent) / 2 / M_PI / std_landmark[0] / std_landmark[1];
-            if(VERBOSE) cout << likelihood << endl;
+            #ifdef VERBOSE
+                cout << likelihood << endl;
+            #endif
         }
-        if(VERBOSE) cout << endl;
+        #ifdef VERBOSE
+            cout << endl;
+        #endif
 
         // Let the weight for the particle be just the product likelihood.
         particle.weight = likelihood;
@@ -240,6 +305,10 @@ void ParticleFilter::resample() {
     // Resample particles with replacement with probability proportional to their weight.
     // NOTE: You may find std::discrete_distribution helpful here.
     //   http://en.cppreference.com/w/cpp/numeric/random/discrete_distribution
+
+    #ifdef DEBUG_PREDICTION
+    return;
+    #endif
 
     vector<double> weights;
     for(auto &particle : particles) {
@@ -259,13 +328,18 @@ void ParticleFilter::resample() {
     particles = resampled;
 }
 
-void ParticleFilter::SetAssociations(Particle& particle, const std::vector<int>& associations, const std::vector<double>& sense_x, const std::vector<double>& sense_y
+void ParticleFilter::SetAssociations(Particle &particle, const vector<int> associations, const vector<double> sense_x,
+                                     const vector<double> sense_y
 )
 {
     //particle: the particle to assign each listed association, and association's (x,y) world coordinates mapping to
     // associations: The landmark id that goes along with each listed association
     // sense_x: the associations x mapping already converted to world coordinates
     // sense_y: the associations y mapping already converted to world coordinates
+    particle.associations.clear();
+    particle.sense_x.clear();
+    particle.sense_y.clear();
+
     particle.associations = associations;
     particle.sense_x = sense_x;
     particle.sense_y = sense_y;
