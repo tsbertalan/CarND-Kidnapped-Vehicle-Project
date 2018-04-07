@@ -107,6 +107,21 @@ vector<double> ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicte
     }
     return distances;
 }
+
+//single_landmark_s car2map(Particle car, LandmarkObs obs) {
+//    single_landmark_s map_obs;
+//    map_obs.x = obs.x + cos(car.theta) * obs.x - sin(car.theta) * obs.y;
+//    map_obs.y = obs.y + sin(car.theta) * obs.x + cos(car.theta) * obs.y;
+//    return map_obs;
+//}
+
+LandmarkObs map2car(Particle car, single_landmark_s map_obs) {
+    LandmarkObs car_obs;
+    car_obs.x = (map_obs.x_f - car.x) * cos(car.theta) + (map_obs.x_f - car.y) * sin(car.theta);
+    car_obs.y = (map_obs.x_f - car.y) * cos(car.theta) - (map_obs.x_f - car.x) * sin(car.theta);
+    // Copy the map ID.
+    car_obs.id = map_obs.id_i;
+    return car_obs;
 }
 
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[], 
