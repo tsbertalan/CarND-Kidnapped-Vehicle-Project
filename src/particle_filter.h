@@ -11,16 +11,26 @@
 
 #include "helper_functions.h"
 
-struct Particle {
+void msg(std::string m);
 
-	int id;
-	double x;
-	double y;
-	double theta;
-	double weight;
-	std::vector<int> associations;
-	std::vector<double> sense_x;
+class Particle {
+
+public:
+//    Particle();
+//    Particle(const Particle &p2);
+//    ~Particle();
+
+    int id;
+    double x;
+    double y;
+    double theta;
+    double weight;
+    std::vector<int> associations;
+    std::vector<double> sense_x;
+
 	std::vector<double> sense_y;
+
+	std::string describe();
 };
 
 class Deviation {
@@ -107,8 +117,11 @@ public:
 	 * Set a particles list of associations, along with the associations calculated world x,y coordinates
 	 * This can be a very useful debugging tool to make sure transformations are correct and assocations correctly connected
 	 */
-	Particle SetAssociations(Particle& particle, const std::vector<int>& associations,
-		                     const std::vector<double>& sense_x, const std::vector<double>& sense_y);
+	void SetAssociations(
+	        Particle& particle,
+            const std::vector<int>& associations,
+            const std::vector<double>& sense_x,
+            const std::vector<double>& sense_y);
 
 	
 	std::string getAssociations(Particle best);
