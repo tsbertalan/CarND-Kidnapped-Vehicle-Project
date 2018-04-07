@@ -20,6 +20,8 @@
 
 using namespace std;
 
+#define VERBOSE false
+
 void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	// Set the number of particles. Initialize all particles to first position (based on estimates of
 	//   x, y, theta and their uncertainties from GPS) and all weights to 1. 
@@ -42,9 +44,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
         p.y = dist_y(gen);
         p.theta = dist_t(gen);
         p.weight = 1;
-        msg("Pushing particle.");
         particles.push_back(p);
-        cout << "Created particle " << i << "." << endl;
     }
 
     is_initialized = true;
@@ -63,11 +63,11 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
     normal_distribution<double> dist_y(0, std_pos[1]);
     normal_distribution<double> dist_t(0, std_pos[2]);
 
+    // Record particle locations to a file for external visualization.
     std::ofstream f;
     f.open("particle_histories.out", std::ios_base::app);
 
     for(auto& p : particles) {
-//        cout << "Particle " << &p << " moved from " << p.describe();
         double xf, yf, tf;
         xf = p.x + velocity / yaw_rate * (sin(p.theta + yaw_rate * delta_t) - sin(p.theta));
         yf = p.y + velocity / yaw_rate * (cos(p.theta) - cos(p.theta + yaw_rate * delta_t));
@@ -76,7 +76,6 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
         p.x = xf;
         p.y = yf;
         p.theta = tf;
-//        cout << " to " << p.describe();
 
         // Add noise.
         double nx, ny, nt;
@@ -88,12 +87,10 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
         p.y += ny;
         p.theta += nt;
 
-
-//        cout << " to " << p.describe() << "." << endl;
+        // Record particle locations.
         f << p.describe();
         f.flush();
 
-//        cout << "noise added: " << nx << "," << ny << "," << nt << endl;
     }
 
     f << endl;
@@ -148,7 +145,6 @@ vector<Deviation> ParticleFilter::dataAssociation(std::vector<LandmarkObs> predi
 }
 
 Map::single_landmark_s car2map(Particle &car, LandmarkObs &obs) {
-//    msg("car2map");
     Map::single_landmark_s map_obs;
     map_obs.x_f = car.x + cos(car.theta) * obs.x - sin(car.theta) * obs.y;
     map_obs.y_f = car.y + sin(car.theta) * obs.x + cos(car.theta) * obs.y;
@@ -191,7 +187,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
         vector<LandmarkObs> assigned_observations = observations;
         vector<Deviation> deviations = dataAssociation(car_landmarks, assigned_observations);
 
-        // Since we did the association now, I guess we should set it in the particle.
+        // Since we did the association now, set it in the particle.
         vector<int> associations;
         vector<double> sense_x;
         vector<double> sense_y;
@@ -209,14 +205,14 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
         );
 
 
-
         // With the distances between observations and predicted landmark locations; calculate a likelihood for each.
         // Compute the product likelihood for the particle.
         double likelihood = 1.0;
         double exponent;
-//        cout << "Weight for particle " << &particle << " is... " << endl;
+        if(VERBOSE) cout << "Weight for particle " << &particle << " is... " << endl;
         for(auto& d : deviations) {
             double dx, dy;
+            // What am I supposed to be doing with sensor_range?
 //            if(d.r() < sensor_range) {
                 dx = d.dx;
                 dy = d.dy;
@@ -224,15 +220,15 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 //                dx = sqrt(pow(sensor_range, 2)/2.0);
 //                dy = dx;
 //            }
-//            cout << "    (" << dx << "," << dy << ")->";
+            if(VERBOSE) cout << "    (" << dx << "," << dy << ")->";
             exponent =
                       pow(dx, 2) / 2 / std_landmark[0] / std_landmark[0]
                     + pow(dy, 2) / 2 / std_landmark[1] / std_landmark[1];
             exponent *= -1;
             likelihood *= exp(exponent) / 2 / M_PI / std_landmark[0] / std_landmark[1];
-//            cout << likelihood << endl;
+            if(VERBOSE) cout << likelihood << endl;
         }
-//        cout << endl;
+        if(VERBOSE) cout << endl;
 
         // Let the weight for the particle be just the product likelihood.
         particle.weight = likelihood;
@@ -241,18 +237,14 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 }
 
 void ParticleFilter::resample() {
-    // TODO: Resample particles with replacement with probability proportional to their weight.
+    // Resample particles with replacement with probability proportional to their weight.
     // NOTE: You may find std::discrete_distribution helpful here.
     //   http://en.cppreference.com/w/cpp/numeric/random/discrete_distribution
 
     vector<double> weights;
-//    cout << "weights = [";
-//    for (int iparticle = 0; iparticle < particles.size(); iparticle++) {
     for(auto &particle : particles) {
         weights.push_back(particle.weight);
-//        cout << particle.weight << ",";
     }
-//    cout << "]" << endl;
 
     unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
     default_random_engine gen(seed);
@@ -267,11 +259,7 @@ void ParticleFilter::resample() {
     particles = resampled;
 }
 
-void ParticleFilter::SetAssociations(
-        Particle& particle,
-        const std::vector<int>& associations,
-        const std::vector<double>& sense_x,
-        const std::vector<double>& sense_y
+void ParticleFilter::SetAssociations(Particle& particle, const std::vector<int>& associations, const std::vector<double>& sense_x, const std::vector<double>& sense_y
 )
 {
     //particle: the particle to assign each listed association, and association's (x,y) world coordinates mapping to
@@ -292,6 +280,7 @@ string ParticleFilter::getAssociations(Particle &best)
     s = s.substr(0, s.length()-1);  // get rid of the trailing space
     return s;
 }
+
 string ParticleFilter::getSenseX(Particle &best)
 {
 	vector<double> v = best.sense_x;
@@ -301,6 +290,7 @@ string ParticleFilter::getSenseX(Particle &best)
     s = s.substr(0, s.length()-1);  // get rid of the trailing space
     return s;
 }
+
 string ParticleFilter::getSenseY(Particle &best)
 {
 	vector<double> v = best.sense_y;
@@ -315,28 +305,7 @@ double Deviation::r() {
     return sqrt(pow(dx, 2) + pow(dy, 2));
 }
 
-Particle::~Particle() {
-    cout << "    Deleting particle at " << this << "; #" << id << " at (" << x << "," << y << "," << theta << ")." << endl;
-    cout.flush();
-}
 
-Particle::Particle() {
-    cout << "    Created particle at " << this << "." << endl;
-    cout.flush();
-}
-
-Particle::Particle(const Particle &p2) {
-    // Copy constructor.
-    id = p2.id;
-    x = p2.x;
-    y = p2.y;
-    theta = p2.theta;
-    associations = p2.associations;
-    sense_x = p2.sense_x;
-    sense_y = p2.sense_y;
-    cout << "    Copied particle " << &p2 << " into " << this << "." << endl;
-    cout.flush();
-}
 void msg(std::string m) {
     std::cout << m << std::endl;
     std::cout.flush();

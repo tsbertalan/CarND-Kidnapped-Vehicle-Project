@@ -16,9 +16,6 @@ void msg(std::string m);
 class Particle {
 
 public:
-    Particle();
-    Particle(const Particle &p2);
-    ~Particle();
 
     int id;
     double x;
@@ -62,7 +59,7 @@ public:
 	ParticleFilter() : num_particles(0), is_initialized(false) {}
 
 	// Destructor
-	~ParticleFilter() {}
+//	~ParticleFilter() {}
 
 	/**
 	 * init Initializes particle filter by initializing particles to Gaussian

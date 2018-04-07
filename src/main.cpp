@@ -63,8 +63,6 @@ int main()
         
         if (event == "telemetry") {
           // j[1] is the data JSON object
-            msg("Got telemetry.");
-
 
           if (!pf.initialized()) {
 
@@ -73,11 +71,8 @@ int main()
               double sense_y = std::stod(j[1]["sense_y"].get<std::string>());
               double sense_theta = std::stod(j[1]["sense_theta"].get<std::string>());
 
-              msg("Initializing particle filter.");
               pf.init(sense_x, sense_y, sense_theta, sigma_pos);
-              msg("PF initialized.");
           } else {
-            msg("Predicting particle movements.");
 			// Predict the vehicle's next state from previous (noiseless control) data.
 		  	double previous_velocity = std::stod(j[1]["previous_velocity"].get<std::string>());
 			double previous_yawrate = std::stod(j[1]["previous_yawrate"].get<std::string>());
@@ -87,7 +82,6 @@ int main()
 
 		  // receive noisy observation data from the simulator
 		  // sense_observations in JSON format [{obs_x,obs_y},{obs_x,obs_y},...{obs_x,obs_y}]
-            msg("Receive noise observation data from the simulator.");
 		  	vector<LandmarkObs> noisy_observations;
 		  	string sense_observations_x = j[1]["sense_observations_x"];
 		  	string sense_observations_y = j[1]["sense_observations_y"];
@@ -115,13 +109,10 @@ int main()
         	}
 
 		  // Update the weights and resample
-          msg("Update weights.");
 		  pf.updateWeights(sensor_range, sigma_landmark, noisy_observations, map);
-		  msg("Resample.");
 		  pf.resample();
 
 		  // Calculate and output the average weighted error of the particle filter over all time steps so far.
-            msg("Calculate average weighted error.");
 		  vector<Particle>& particles = pf.particles;
 		  int num_particles = particles.size();
 		  double highest_weight = -1.0;
@@ -143,16 +134,13 @@ int main()
           msgJson["best_particle_theta"] = best_particle.theta;
 
           //Optional message data used for debugging particle's sensing and associations
-            msg("Generate message to simulator with best particle senses and associations.");
           msgJson["best_particle_associations"] = pf.getAssociations(best_particle);
           msgJson["best_particle_sense_x"] = pf.getSenseX(best_particle);
           msgJson["best_particle_sense_y"] = pf.getSenseY(best_particle);
 
           auto message = "42[\"best_particle\"," + msgJson.dump() + "]";
           // std::cout << msg << std::endl;
-            msg("Send message back to simulator.");
           ws.send(message.data(), message.length(), uWS::OpCode::TEXT);
-          msg("Message sent.");
 	  
         }
       } else {
