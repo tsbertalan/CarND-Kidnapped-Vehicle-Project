@@ -16,9 +16,9 @@ void msg(std::string m);
 class Particle {
 
 public:
-//    Particle();
-//    Particle(const Particle &p2);
-//    ~Particle();
+    Particle();
+    Particle(const Particle &p2);
+    ~Particle();
 
     int id;
     double x;
@@ -124,9 +124,9 @@ public:
             const std::vector<double>& sense_y);
 
 	
-	std::string getAssociations(Particle best);
-	std::string getSenseX(Particle best);
-	std::string getSenseY(Particle best);
+	std::string getAssociations(Particle &best);
+	std::string getSenseX(Particle &best);
+	std::string getSenseY(Particle &best);
 
 	/**
 	* initialized Returns whether particle filter is initialized yet or not.

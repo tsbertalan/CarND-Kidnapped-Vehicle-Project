@@ -67,15 +67,16 @@ int main()
 
 
           if (!pf.initialized()) {
+
+              // Sense noisy position data from the simulator
+              double sense_x = std::stod(j[1]["sense_x"].get<std::string>());
+              double sense_y = std::stod(j[1]["sense_y"].get<std::string>());
+              double sense_theta = std::stod(j[1]["sense_theta"].get<std::string>());
+
               msg("Initializing particle filter.");
-
-          	// Sense noisy position data from the simulator
-			double sense_x = std::stod(j[1]["sense_x"].get<std::string>());
-			double sense_y = std::stod(j[1]["sense_y"].get<std::string>());
-			double sense_theta = std::stod(j[1]["sense_theta"].get<std::string>());
-
-			pf.init(sense_x, sense_y, sense_theta, sigma_pos);
-		  } else {
+              pf.init(sense_x, sense_y, sense_theta, sigma_pos);
+              msg("PF initialized.");
+          } else {
             msg("Predicting particle movements.");
 			// Predict the vehicle's next state from previous (noiseless control) data.
 		  	double previous_velocity = std::stod(j[1]["previous_velocity"].get<std::string>());
@@ -121,10 +122,10 @@ int main()
 
 		  // Calculate and output the average weighted error of the particle filter over all time steps so far.
             msg("Calculate average weighted error.");
-		  vector<Particle> particles = pf.particles;
+		  vector<Particle>& particles = pf.particles;
 		  int num_particles = particles.size();
 		  double highest_weight = -1.0;
-		  Particle best_particle;
+		  Particle& best_particle = particles[0];
 		  double weight_sum = 0.0;
 		  for (int i = 0; i < num_particles; ++i) {
 			if (particles[i].weight > highest_weight) {

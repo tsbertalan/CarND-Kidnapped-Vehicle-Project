@@ -42,8 +42,9 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
         p.y = dist_y(gen);
         p.theta = dist_t(gen);
         p.weight = 1;
-
+        msg("Pushing particle.");
         particles.push_back(p);
+        cout << "Created particle " << i << "." << endl;
     }
 
     is_initialized = true;
@@ -66,7 +67,7 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
     f.open("particle_histories.out", std::ios_base::app);
 
     for(auto& p : particles) {
-        cout << "Particle " << &p << " moved from " << p.describe();
+//        cout << "Particle " << &p << " moved from " << p.describe();
         double xf, yf, tf;
         xf = p.x + velocity / yaw_rate * (sin(p.theta + yaw_rate * delta_t) - sin(p.theta));
         yf = p.y + velocity / yaw_rate * (cos(p.theta) - cos(p.theta + yaw_rate * delta_t));
@@ -75,7 +76,7 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
         p.x = xf;
         p.y = yf;
         p.theta = tf;
-        cout << " to " << p.describe();
+//        cout << " to " << p.describe();
 
         // Add noise.
         double nx, ny, nt;
@@ -88,11 +89,11 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
         p.theta += nt;
 
 
-        cout << " to " << p.describe() << "." << endl;
+//        cout << " to " << p.describe() << "." << endl;
         f << p.describe();
         f.flush();
 
-        cout << "noise added: " << nx << "," << ny << "," << nt << endl;
+//        cout << "noise added: " << nx << "," << ny << "," << nt << endl;
     }
 
     f << endl;
@@ -111,17 +112,20 @@ vector<Deviation> ParticleFilter::dataAssociation(std::vector<LandmarkObs> predi
 
 
     // Brute force method.
+    // It would be better to keep the landmarks in a quadtree,
+    // and restrict our search only to a small neighborhood of the observation.
     vector<Deviation> deviations;
-    Deviation deviation, smallest_deviation;
 
     // Loop over all the landmark observations.
     for(auto& observation : observations) {
 
         // Find the nearest map landmark.
-        double smallest_distance = INFINITY;
+        Deviation deviation, smallest_deviation;
+        smallest_deviation.dx = INFINITY;
+        smallest_deviation.dy = INFINITY;
 
         // Loop over all the map landmarks, transformed into car coordinates.
-        for(auto & prediction : predicted) {
+        for(auto& prediction : predicted) {
 
             // Find the distance to this map landmark.
             deviation.dx = prediction.x - observation.x;
@@ -129,11 +133,10 @@ vector<Deviation> ParticleFilter::dataAssociation(std::vector<LandmarkObs> predi
 
             // Record the closest map landmark for this observed landmark.
             double r = deviation.r();
-            if( r < smallest_distance ) {
+            if( r < smallest_deviation.r() ) {
                 smallest_deviation.dx = deviation.dx;
                 smallest_deviation.dy = deviation.dy;
                 observation.id = prediction.id;
-                smallest_distance = r;
             }
         }
 
@@ -141,11 +144,10 @@ vector<Deviation> ParticleFilter::dataAssociation(std::vector<LandmarkObs> predi
         deviations.push_back(smallest_deviation);
     }
 
-
     return deviations;
 }
 
-Map::single_landmark_s car2map(Particle& car, LandmarkObs obs) {
+Map::single_landmark_s car2map(Particle &car, LandmarkObs &obs) {
 //    msg("car2map");
     Map::single_landmark_s map_obs;
     map_obs.x_f = car.x + cos(car.theta) * obs.x - sin(car.theta) * obs.y;
@@ -154,15 +156,10 @@ Map::single_landmark_s car2map(Particle& car, LandmarkObs obs) {
 }
 
 LandmarkObs map2car(Particle& car, Map::single_landmark_s map_obs) {
-//    msg("map2car");
     LandmarkObs car_obs;
-//    cout << "Map observation " << map_obs.x_f << "," << map_obs.y_f << endl;
-//    cout << "With car particle " << car.x<<","<<car.y<<","<<car.theta<<endl;
     car_obs.x = (map_obs.x_f - car.x) * cos(car.theta) + (map_obs.x_f - car.y) * sin(car.theta);
     car_obs.y = (map_obs.y_f - car.y) * cos(car.theta) - (map_obs.x_f - car.x) * sin(car.theta);
-    // Copy the map ID.
     car_obs.id = map_obs.id_i;
-//    cout << "Gives car observation " << car_obs.x << "," << car_obs.y << endl;
     return car_obs;
 }
 
@@ -220,13 +217,13 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 //        cout << "Weight for particle " << &particle << " is... " << endl;
         for(auto& d : deviations) {
             double dx, dy;
-            if(d.r() < sensor_range) {
+//            if(d.r() < sensor_range) {
                 dx = d.dx;
                 dy = d.dy;
-            } else {
-                dx = sqrt(pow(sensor_range, 2)/2.0);
-                dy = dx;
-            }
+//            } else {
+//                dx = sqrt(pow(sensor_range, 2)/2.0);
+//                dy = dx;
+//            }
 //            cout << "    (" << dx << "," << dy << ")->";
             exponent =
                       pow(dx, 2) / 2 / std_landmark[0] / std_landmark[0]
@@ -286,7 +283,7 @@ void ParticleFilter::SetAssociations(
     particle.sense_y = sense_y;
 }
 
-string ParticleFilter::getAssociations(Particle best)
+string ParticleFilter::getAssociations(Particle &best)
 {
 	vector<int> v = best.associations;
 	stringstream ss;
@@ -295,7 +292,7 @@ string ParticleFilter::getAssociations(Particle best)
     s = s.substr(0, s.length()-1);  // get rid of the trailing space
     return s;
 }
-string ParticleFilter::getSenseX(Particle best)
+string ParticleFilter::getSenseX(Particle &best)
 {
 	vector<double> v = best.sense_x;
 	stringstream ss;
@@ -304,7 +301,7 @@ string ParticleFilter::getSenseX(Particle best)
     s = s.substr(0, s.length()-1);  // get rid of the trailing space
     return s;
 }
-string ParticleFilter::getSenseY(Particle best)
+string ParticleFilter::getSenseY(Particle &best)
 {
 	vector<double> v = best.sense_y;
 	stringstream ss;
@@ -318,27 +315,31 @@ double Deviation::r() {
     return sqrt(pow(dx, 2) + pow(dy, 2));
 }
 
-//Particle::~Particle() {
-//    cout << "    Deleting particle at " << this << "; #" << id << " at (" << x << "," << y << "," << theta << ")." << endl;
-//}
-//
-//Particle::Particle() {
-//    cout << "    Created particle at " << this << "." << endl;
-//}
-//
-//Particle::Particle(const Particle &p2) {
-//    // Copy constructor.
-//    cout << "    Copied particle " << &p2 << " into " << this << "." << endl;
-//    id = p2.id;
-//    x = p2.x;
-//    y = p2.y;
-//    theta = p2.theta;
-//    associations = p2.associations;
-//    sense_x = p2.sense_x;
-//    sense_y = p2.sense_y;
-//}
+Particle::~Particle() {
+    cout << "    Deleting particle at " << this << "; #" << id << " at (" << x << "," << y << "," << theta << ")." << endl;
+    cout.flush();
+}
+
+Particle::Particle() {
+    cout << "    Created particle at " << this << "." << endl;
+    cout.flush();
+}
+
+Particle::Particle(const Particle &p2) {
+    // Copy constructor.
+    id = p2.id;
+    x = p2.x;
+    y = p2.y;
+    theta = p2.theta;
+    associations = p2.associations;
+    sense_x = p2.sense_x;
+    sense_y = p2.sense_y;
+    cout << "    Copied particle " << &p2 << " into " << this << "." << endl;
+    cout.flush();
+}
 void msg(std::string m) {
     std::cout << m << std::endl;
+    std::cout.flush();
 }
 
 std::string Particle::describe() {
