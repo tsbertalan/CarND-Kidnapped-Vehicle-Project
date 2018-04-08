@@ -20,7 +20,11 @@
 
 using namespace std;
 
+// Print out lots more information?
 //#define VERBOSE
+
+// Record all particles positions to a file?
+//#define RECORD_PARTICLES
 
 void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	// Set the number of particles. Initialize all particles to first position (based on estimates of
@@ -29,7 +33,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	// NOTE: Consult particle_filter.h for more information about this method (and others in this file).
 
 
-    num_particles = 300;
+    num_particles = 100;
 
     unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
     default_random_engine gen(seed);
@@ -72,9 +76,11 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
     normal_distribution<double> dist_y(0, std_pos[1]);
     normal_distribution<double> dist_t(0, std_pos[2]);
 
-    // Record particle locations to a file for external visualization.
-    std::ofstream f;
-    f.open("particle_histories.out", std::ios_base::app);
+    #ifdef RECORD_PARTICLES
+        // Record particle locations to a file for external visualization.
+        std::ofstream f;
+        f.open("particle_histories.out", std::ios_base::app);
+    #endif
 
     for(auto& p : particles) {
         double xf, yf, tf;
@@ -104,15 +110,18 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
             p.theta += nt;
         #endif
 
-        // Record particle locations.
-        f << p.describe();
-        f.flush();
+        #ifdef RECORD_PARTICLES
+            // Record particle locations.
+            f << p.describe();
+            f.flush();
+        #endif
 
     }
 
-    f << endl;
-
-    f.close();
+    #ifdef RECORD_PARTICLES
+        f << endl;
+        f.close();
+    #endif
 
 }
 
@@ -239,34 +248,38 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
     weights.clear();
     for(Particle &particle : particles) {
 
-        // Predict where the landmarks would be for this particle:
-        // transform landmarks to car coordinates.
-        vector<LandmarkObs> car_landmarks;
-        for(auto& landmark : map_landmarks.landmark_list) {
-            car_landmarks.push_back(map2car(particle, landmark));
+        // Do the data association in map space.
+
+        // Copy landmarks into a vector of observations.
+        vector<LandmarkObs> landmarks;
+        for(auto& map_landmark : map_landmarks.landmark_list) {
+            landmarks.push_back(LandmarkObs{map_landmark.id_i, map_landmark.x_f, map_landmark.y_f});
+        }
+
+        // Transform observations to map space.
+        // Others suggested using sensor_range here to restrict our search later,
+        // but you still need to iterate over all (particle x observation) pairs to do that exclusion,
+        // so it's not a savings. As mentioned above in dataAssocation, the real way to use
+        // sensor_range for a speedup would be something like a quadtree.
+        vector<LandmarkObs> map_observations;
+        for(auto car_observation : observations) {
+            Map::single_landmark_s map_observation = car2map(particle, car_observation);
+            map_observations.push_back(LandmarkObs{map_observation.id_i, map_observation.x_f, map_observation.y_f});
         }
 
         // Associate each observation with one landmark.
-        // Since observations is const, copy it here ... ?
-        vector<LandmarkObs> assigned_observations = observations;
-        vector<Deviation> deviations = dataAssociation(car_landmarks, assigned_observations);
+        vector<Deviation> deviations = dataAssociation(landmarks, map_observations);
 
         // Since we did the association now, set it in the particle.
         vector<int> associations;
         vector<double> sense_x;
         vector<double> sense_y;
-        for(auto& obs : assigned_observations) {
+        for(auto& obs : map_observations) {
             associations.push_back(obs.id);
-            Map::single_landmark_s sense = car2map(particle, obs);
-            sense_x.push_back(sense.x_f);
-            sense_y.push_back(sense.y_f);
+            sense_x.push_back(obs.x);
+            sense_y.push_back(obs.y);
         }
-        SetAssociations(
-                particle,
-                associations,
-                sense_x,
-                sense_y
-        );
+        SetAssociations(particle, associations, sense_x, sense_y);
 
 
         // With the distances between observations and predicted landmark locations; calculate a likelihood for each.
