@@ -78,9 +78,15 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
 
     for(auto& p : particles) {
         double xf, yf, tf;
-        xf = p.x + velocity / yaw_rate * (sin(p.theta + yaw_rate * delta_t) - sin(p.theta));
-        yf = p.y + velocity / yaw_rate * (cos(p.theta) - cos(p.theta + yaw_rate * delta_t));
-        tf = p.theta + yaw_rate * delta_t;
+        if(fabs(yaw_rate) < .001) {
+            xf = p.x + velocity * delta_t * cos(p.theta);
+            yf = p.y + velocity * delta_t * sin(p.theta);
+            tf = p.theta + yaw_rate * delta_t;
+        } else {
+            xf = p.x + velocity / yaw_rate * (sin(p.theta + yaw_rate * delta_t) - sin(p.theta));
+            yf = p.y + velocity / yaw_rate * (cos(p.theta) - cos(p.theta + yaw_rate * delta_t));
+            tf = p.theta + yaw_rate * delta_t;
+        }
 
         p.x = xf;
         p.y = yf;
@@ -230,6 +236,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
     #endif
 
     // For each particle ...
+    weights.clear();
     for(Particle &particle : particles) {
 
         // Predict where the landmarks would be for this particle:
@@ -297,7 +304,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 
         // Let the weight for the particle be just the product likelihood.
         particle.weight = likelihood;
-
+        weights.push_back(likelihood);
     }
 }
 
